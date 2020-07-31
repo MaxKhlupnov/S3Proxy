@@ -33,11 +33,45 @@ namespace S3ProxySvc.Controllers
         }
 
         [HttpPost]
+        [Route("WriteBinary")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> WriteBinary([FromForm] IFormFile File, string BucketName)
+        {
+            if (string.IsNullOrEmpty(BucketName))
+                return StatusCode(StatusCodes.Status400BadRequest, " BucketName required");
+
+            PutObjectRequest putRequest = new PutObjectRequest
+            {
+                 BucketName = BucketName,
+                 Key = Guid.NewGuid().ToString("N"),
+                 InputStream = File.OpenReadStream()
+            };
+
+            putRequest.Metadata.Add("FileName", File.FileName);
+            putRequest.Metadata.Add("ContentType", File.ContentType);
+            try
+            {
+                PutObjectResponse res = await this.yandexS3.PutObjectAsync(putRequest);
+            }catch (Exception ex)
+            {             
+                return StatusCode(StatusCodes.Status500InternalServerError, $"{putRequest.BucketName} {putRequest.Key} {ex.Message}");
+            }
+
+           return Ok(putRequest.FilePath);
+        }
+
+        [HttpPost]
         [Route("ReadBinary")]
         [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<ActionResult> ReadBinary([FromBody] GetObjectRequestModel request)
         {
-             
+            if (string.IsNullOrEmpty(request.BucketName))
+                return StatusCode(StatusCodes.Status400BadRequest, " BucketName required");
+
             GetObjectRequest req = new GetObjectRequest
             {
                 BucketName = request.BucketName,
@@ -56,8 +90,13 @@ namespace S3ProxySvc.Controllers
         [HttpPost]
         [Route("ReadText")]
         [ProducesResponseType(StatusCodes.Status200OK)]
-        public async Task<string> ReadText([FromBody] GetTextObjectRequestModel request)
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<ActionResult<string>> ReadText([FromBody] GetTextObjectRequestModel request)
         {
+
+            if (string.IsNullOrEmpty(request.BucketName))
+                return StatusCode(StatusCodes.Status400BadRequest, " BucketName required");
+
             GetObjectRequest req = new GetObjectRequest
             {
                 BucketName = request.BucketName,
